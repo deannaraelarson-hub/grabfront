@@ -4,7 +4,7 @@ import PasswordUploadForm from './components/PasswordUploadForm'; // Assume this
 import './Dashboard.css'; // Good practice: use CSS
 
 // IMPORTANT: This URL must point to your deployed Render Backend
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api'; 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'; 
 
 function Dashboard() {
     const [passwords, setPasswords] = useState([]);
