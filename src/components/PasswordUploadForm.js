@@ -4,7 +4,7 @@ import axios from 'axios';
 const PasswordUploadForm = ({ onManualAdd }) => {
     const [formData, setFormData] = useState({ serviceName: '', username: '', password: '', source: '' });
     const [feedback, setFeedback] = useState('');
-    const API_BASE_URL = 'http://localhost:3000/api'; // Should be your Render URL in production
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
