@@ -1,28 +1,27 @@
 {
   "name": "password-grubber",
   "version": "1.0.0",
-  "description": "Password aggregation dashboard + API",
+  "description": "API for password aggregation and notification.",
   "private": true,
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev:server": "nodemon server.js",
-    "dev": "vite",
+    "dev": "nodemon server.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "axios": "^1.6.8",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "axios": "^1.6.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.8",
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "vite": "^5.4.8"
   },
   "engines": {
     "node": ">=18"
