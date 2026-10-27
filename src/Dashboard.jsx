@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import PasswordUploadForm from './components/PasswordUploadForm'; // Assume this component exists
-import './Dashboard.css'; // Good practice: use CSS
+import PasswordUploadForm from './components/PasswordUploadForm';
+import './Dashboard.css';
 
-// IMPORTANT: This URL must point to your deployed Render Backend
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'; 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 function Dashboard() {
     const [passwords, setPasswords] = useState([]);
@@ -12,134 +11,84 @@ function Dashboard() {
     const [notificationStatus, setNotificationStatus] = useState('');
     const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-    // --- OFFLINE FALLBACK LOGIC ---
+    // Load cache immediately
     useEffect(() => {
-        // 1. Check initial status
-        setIsOnline(navigator.onLine);
-
-        // 2. Attempt to load data from local storage IMMEDIATELY (Offline first)
-        const storedPasswords = localStorage.getItem('savedPasswordInventory');
-        if (storedPasswords) {
-            try {
-                const parsedData = JSON.parse(storedPasswords);
-                setPasswords(parsedData);
-                console.log("Data loaded successfully from LocalStorage (Offline mode active).");
-            } catch (e) {
-                console.error("Error parsing local storage data:", e);
-            }
+        const stored = localStorage.getItem('savedPasswordInventory');
+        if (stored) {
+            try { setPasswords(JSON.parse(stored)); } catch (e) {}
         }
     }, []);
 
-    // --- FETCHING & REFRESHING LOGIC ---
+    // Stable fetch function — NO passwords dependency
     const fetchPasswords = useCallback(async () => {
-        console.log("Attempting to fetch data from API...");
         setLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/report/all`);
-            const serverData = response.data;
-
-            // Update state with fresh server data
-            setPasswords(serverData);
-
-            // **SAVE SUCCESSFUL DATA TO LOCAL STORAGE**
-            localStorage.setItem('savedPasswordInventory', JSON.stringify(serverData));
-
-            setNotificationStatus('✅ Data successfully updated from server.');
-
+            const { data } = await axios.get(`${API_BASE_URL}/report/all`, { timeout: 90000 });
+            setPasswords(data);
+            localStorage.setItem('savedPasswordInventory', JSON.stringify(data));
+            setNotificationStatus('✅ Updated from server.');
         } catch (error) {
-            console.error("Error fetching data from server:", error);
-            // If API fetch fails, we rely on the initial/cached data already in state.
-            if (passwords.length > 0) {
-                setNotificationStatus('⚠️ API Failure: Displaying cached data from last session (Offline view active).');
-            } else {
-                setNotificationStatus('🔴 CRITICAL: Connection Error AND No cached data found.');
-            }
+            console.error(error);
+            setPasswords(prev => {
+                setNotificationStatus(
+                    prev.length > 0
+                        ? '⚠️ API failed. Showing cached data.'
+                        : '🔴 Connection error and no cache.'
+                );
+                return prev;
+            });
         } finally {
             setLoading(false);
         }
-    }, [passwords]); // Depend on passwords to confirm if we have initial data
+    }, []);
 
-    // --- SET UP AUTO-REFRESH & WINDOW LISTENERS ---
+    // Initial fetch + interval + online listener
     useEffect(() => {
-        // Auto-refresh timer
-        const intervalId = setInterval(fetchPasswords, 300000); 
-
-        // Listen for network changes (Goes online/offline)
-        const handleOnline = () => {
-            setIsOnline(true);
-            console.log("--- ONLINE DETECTED ---");
-            // Re-fetch immediately when connection is restored
-            fetchPasswords(); 
-        };
-        const handleOffline = () => {
-            setIsOnline(false);
-            console.log("--- OFFLINE DETECTED ---");
-        };
-
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-
+        fetchPasswords();
+        const id = setInterval(fetchPasswords, 300000);
+        const onOnline = () => { setIsOnline(true); fetchPasswords(); };
+        const onOffline = () => setIsOnline(false);
+        window.addEventListener('online', onOnline);
+        window.addEventListener('offline', onOffline);
         return () => {
-            clearInterval(intervalId);
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
+            clearInterval(id);
+            window.removeEventListener('online', onOnline);
+            window.removeEventListener('offline', onOffline);
         };
     }, [fetchPasswords]);
 
-    // --- Notification Trigger ---
     const triggerNotification = async () => {
-        // This action is synchronous and relies on the network being available.
-        if (!isOnline) {
-            setNotificationStatus("❌ Cannot trigger Telegram: Device is currently offline.");
-            return;
-        }
+        if (!isOnline) { setNotificationStatus('❌ Offline.'); return; }
         try {
-            const response = await axios.post(`${API_BASE_URL}/notify/telegram`);
-            setNotificationStatus('✅ Notification sent successfully to Telegram.');
-        } catch (error) {
-            setNotificationStatus('❌ Failed to send Telegram notification. Server might be down or credentials invalid.');
+            await axios.post(`${API_BASE_URL}/notify/telegram`, {}, { timeout: 20000 });
+            setNotificationStatus('✅ Telegram sent.');
+        } catch {
+            setNotificationStatus('❌ Telegram failed.');
         }
     };
 
-    const handleManualAdd = (newPassword) => {
-        // When manual data is added, immediately try to refresh the list
-        fetchPasswords(); 
-    }
+    const handleManualAdd = () => fetchPasswords();
 
     if (loading && passwords.length === 0) {
-        return <div className="loading-screen">🌐 Loading Passwords...</div>;
+        return <div className="loading-screen">🌐 Loading...</div>;
     }
 
     return (
         <div className="dashboard-container">
-            <h1>🌐 Universal Password Dashboard</h1>
-
+            <h1>🌐 Universal Dashboard</h1>
             <div className={`status-bar ${isOnline ? 'online' : 'offline'}`}>
-                Status: {isOnline ? '✅ Online & Syncing' : '❌ OFFLINE - Viewing Cached Data'}
+                {isOnline ? '✅ Online' : '❌ Offline'}
             </div>
-
-            <button onClick={triggerNotification} className="notify-button">
-                🔔 Trigger Telegram Report
-            </button>
-
+            <button onClick={triggerNotification} className="notify-button">🔔 Telegram</button>
             <PasswordUploadForm onManualAdd={handleManualAdd} />
-
-            <h2>🔑 Password Inventory ({passwords.length} Total)</h2>
-
+            <h2>🔑 Inventory ({passwords.length})</h2>
             {passwords.length > 0 ? (
                 <div className="table-wrapper">
                     <table>
-                        <thead>
-                            <tr>
-                                <th>Service</th>
-                                <th>Username</th>
-                                <th>Password</th>
-                                <th>Source</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Service</th><th>Username</th><th>Password</th><th>Source</th></tr></thead>
                         <tbody>
-                            {passwords.map((pw, index) => (
-                                <tr key={index}>
+                            {passwords.map((pw, i) => (
+                                <tr key={i}>
                                     <td>{pw.serviceName}</td>
                                     <td>{pw.username}</td>
                                     <td className="password-cell">{pw.password}</td>
@@ -149,9 +98,7 @@ function Dashboard() {
                         </tbody>
                     </table>
                 </div>
-            ) : (
-                <p className="no-data">No passwords found. Start scanning or enter data manually.</p>
-            )}
+            ) : <p className="no-data">No data. Enter manually or wait for scrape.</p>}
         </div>
     );
 }
